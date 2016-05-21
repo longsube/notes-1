@@ -1,11 +1,11 @@
 #Hugepages in virtualization
 
-Một Bộ nhớ chính được phân thành một tập các vùng liên tục được gọi là pages. Mặc định kích thước một pages này là 4K bytes. Do vậy khi dung lượng bộ nhớ tăng lên số lượng pages cũng tăng lên rất nhanh. 
+Một Bộ nhớ chính được phân thành một tập các vùng liên tục được gọi là pages. Mặc định kích thước một pages này là 4K bytes. Do vậy khi dung lượng bộ nhớ tăng lên số lượng pages cũng tăng lên rất nhanh.
 
 Ví dụ: Một bộ nhớ  RAM 10GB  ta sẽ có 2.6 triệu pages.
 
 
-Các tiến trình thì được CPU cấp phát cho vùng nhớ có địa chỉ nhớ ảo. 
+Các tiến trình thì được CPU cấp phát cho vùng nhớ có địa chỉ nhớ ảo.
 Khi tiến trình muốn truy cập vào dữ liệu trên bộ nhớ chính nó sẽ sử dụng PageTable để thực hiện việc ánh xạ địa chỉ ảo này sang địa chỉ vật lý.
 
 Việc tìm kiếm và ánh xạ mất rất nhiều thời gian do phải tìm từng pages một. Do vậy người ta đã thiết kế một bộ nhớ cache để  lưu trữ các pages được truy cập gần đây nhất gọi là Translation Lookaside Pages (TLP) nhưng bộ cache này có kích thước rất nhỏ nên vẫn không giải quyết được vấn đề về truy vấn vào bộ nhớ ram.
@@ -39,7 +39,7 @@ Kiểm tra meminfo
 
 Kết quả như sau
 
-<img src="http://i.imgur.com/KVDe4uW.png"
+<img src="http://i.imgur.com/KVDe4uW.png">
 
 - Hugepages_Total: là tổng số pages
 
@@ -90,10 +90,3 @@ Kiểm tra meminfo `cat /proc/meminfo | grep Huge`
 <img src="http://i.imgur.com/WGz2pin.png">
 
 Số Hugepages_Free lúc này là 744 =>  đã sử dụng 256 pages => 512MB => Bằng số ram của VM cirros
-
-
-
-
-
-
-
