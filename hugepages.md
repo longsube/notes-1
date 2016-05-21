@@ -1,4 +1,5 @@
 #Hugepages in virtualization
+### Pagesize
 
 Một Bộ nhớ chính được phân thành một tập các vùng liên tục được gọi là pages. Mặc định kích thước một pages này là 4K bytes. Do vậy khi dung lượng bộ nhớ tăng lên số lượng pages cũng tăng lên rất nhanh.
 
@@ -18,6 +19,17 @@ Làm một phép tính đơn giản ta sẽ thấy nếu ta có bộ nhớ ram 1
 
 Vậy việc tìm kiếm và ánh xạ địa chỉ ảo và địa chỉ vật lý sẽ nhanh hơn do tìm kiếm nhanh hơn
 
+###Paged out
+
+Khi sử dụng TLP làm bộ nhớ đệm. Vì kích thước nhỏ nên khi ta truy xuất vào để ánh xạ địa chỉ vật lý sẽ xảy ra 2 trường hợp. Một là có tồn tại trong TLP và từ đó lấy được địa chỉ vật lý (TLP Hit). Hai là không có trong TLP (TLP miss) do đó CPU sẽ thực hiện tìm kiếm trên PageTable. Và update giá trị ánh xạ mới vào TLP. Nếu bộ nhớ TLP đầy các entry không được sử dụng lâu nhất sẽ bị đẩy ra vùng nhớ khác (swap) ta gọi đó là Paged out.
+
+Khi sử dụng Hugepages các entry này sẽ luôn luôn tồn tại trong Hugepages do vậy không có hiện tượng Paged out.
+
+Kết luận: Hugepages sẽ có hai ưu điểm làm tăng tốc hiệu năng của ứng dụng sử dụng nó và có 2 điểm chính cần lưu ý:
+
+- Pagesize lớn hơn mặc định (4KB): Có thể là 2MB , 1GB , ..
+
+- Các entry bị locked trong Hugepages và không thể paged out
 
 ###Cấu hình trên Ubuntu 14.04 + KVM
 
