@@ -21,7 +21,7 @@ Vậy việc tìm kiếm và ánh xạ địa chỉ ảo và địa chỉ vật 
 
 ###Paged out
 
-Khi sử dụng TLB làm bộ nhớ đệm. Vì kích thước nhỏ nên khi ta truy xuất vào để ánh xạ địa chỉ vật lý sẽ xảy ra 2 trường hợp. Một là có tồn tại trong TLB và từ đó lấy được địa chỉ vật lý (TLB Hit). Hai là không có trong TLB (TLB miss) do đó CPU sẽ thực hiện tìm kiếm trên PageTable. Và update giá trị ánh xạ mới vào TLB. Nếu bộ nhớ TLB đầy các entry không được sử dụng lâu nhất sẽ bị đẩy ra vùng nhớ khác (swap) ta gọi đó là Paged out.
+Khi sử dụng TLB làm bộ nhớ đệm. Vì kích thước nhỏ nên khi ta truy xuất vào để ánh xạ địa chỉ vật lý sẽ xảy ra 2 trường hợp. Một là có tồn tại trong TLB và từ đó lấy được địa chỉ vật lý (TLB Hit). Hai là không có trong TLB (TLB miss) do đó CPU sẽ thực hiện tìm kiếm trên PageTable. Và update giá trị ánh xạ mới vào TLB. Nếu bộ nhớ TLP đầy các entry không được sử dụng lâu nhất sẽ bị đẩy ra vùng nhớ khác (swap) ta gọi đó là Paged out.
 
 Khi sử dụng Hugepages các entry này sẽ luôn luôn tồn tại trong Hugepages do vậy không có hiện tượng Paged out.
 
