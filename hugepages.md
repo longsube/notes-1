@@ -36,7 +36,7 @@ Hugepages sẽ có hai ưu điểm làm tăng tốc hiệu năng của ứng d�
 
 Để thực hiện cấu hình cho các VMs trên Hypervisor KVM sử  dụng hugepages ta cần enable hugepages bằng việc khai báo các hugepages trong /etc/sysctl.conf
 
-Ví dụ tôi muốn dùng 2GB cho Hugepages ta sẽ cần dùng 2000 pages
+Ví dụ tôi muốn dùng 2GB cho Hugepages ta sẽ cần dùng 1000 pages
 
 Thêm dòng sau
 
