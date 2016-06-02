@@ -21,7 +21,7 @@ Về mặt hiệu năng, Hypercontainer là siêu nhẹ
 - Chưa tới một giây để Boot: mili giây để launch một Hypercontainer
 - Slimmed Footprint: khoảng 28MB RAM
 
-Với Hypercontainer, tương lai của container as a Service chỉ xung quanh góc 
+Với Hypercontainer, tương lai của container as a Service chỉ xung quanh góc
 
 <img src="https://trello-attachments.s3.amazonaws.com/552ba9ad83b51945d06ef23b/940x238/9e7346bfd21bc756361c70d8397e76f2/upload_2015-04-13_at_7.58.15_pm.png">
 
@@ -29,32 +29,22 @@ Với Hypercontainer, tương lai của container as a Service chỉ xung quanh 
 
 ####Hypercontainer hoạt động như thế nào
 
-Hyper có 4 thành phần: 
-- CLI: hyperctl
+Hyper có 4 thành phần:
+- CLI: hyper
 - Daemon: hyperd ( REST APIs)
 - Guest kernel: hyperkernel
 - Guest init service: hyperstart
 
 Trên một host linux vật lý thực hiện như sau
 
-```
-#hyperctl pull nginx:latest
-#hyperctl run nginx:latest
+<img src="http://i.imgur.com/iLNCWEQ.png">
 
-```
+<img src="http://i.imgur.com/mw7Tk4I.png">
 
 Sau khi chạy, Hyper sẽ launch các docker image với 1 VM instance hay vì các container
 
-```
-#docker ps
-#hyperctl list
-
-```
+<img src="http://i.imgur.com/arOxiXH.png">
 
 Bên trong HyperVM, Một linux kernel tối giản gọi là `HyperKernel` đươc boot. Kernel này sử dụng một service init nhỏ được gọi là `Hyperstart` để load các image Docker từ host, cài đặt MNT namespace dể cô lập filesystem của chúng và thực hiện launch chúng.
 
 <img src="https://trello-attachments.s3.amazonaws.com/554c998a4c9dacc5c143ec99/1083x635/c8748abc93dbc18e70f7a09d2963e8ff/hyper.png">
-
-
-
-
