@@ -295,11 +295,8 @@ neutron net-list
 Tham khảo 2 script sau.
 
 Script tạo thinly provisioned chạy trên 2 node
-
 <script src="https://gist.github.com/greatbn/506d0aee6135071744154a10328ef70d.js"></script>
-
 Tạo gluster volume chỉ cần chạy trên 1 node
-
 <script src="https://gist.github.com/greatbn/0bd09b58b0d389a377846ba0ec6f491c.js"></script>
 
 
