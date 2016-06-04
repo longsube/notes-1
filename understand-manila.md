@@ -296,40 +296,11 @@ Tham khảo 2 script sau.
 
 Script tạo thinly provisioned chạy trên 2 node
 
-```
-apt-get install xfsprogs -y
-pvcreate /dev/sdb
-vgcreate myVG /dev/sdb
-lvcreate -L 8G -T myVG/thinpool
-for ((i = 1;i<= 5; i++ ))
-do
-mkdir -p /manila/manila-"$i"
-for (( j = 1; j<= 5; j++))
-do
-lvcreate -V "${i}"Gb -T myVG/thinpool -n vol-"$i"-"$j"
-mkfs.xfs /dev/myVG/vol-"$i"-"$j"
-mkdir -p /manila/manila-"$i"/manila-"$j"
-mount /dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j"
-echo "/dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j" xfs 0 2" >> /etc/fstab
-done
-done
-
-
-```
+<script src="https://gist.github.com/greatbn/506d0aee6135071744154a10328ef70d.js"></script>
 
 Tạo gluster volume chỉ cần chạy trên 1 node
 
-```
-for (( i= 1 ; i <= 5; i++))
-do
-for(( j= 1; j<=5 ;j++))
-do
-gluster volume create manila-"$i"-"$j" replica 2 glusterfs-1:/manila/manila-"$i"/manila-"$j"/br glusterfs-2:/manila/manila-"$i"/manila-"$j"/br
-gluster volume start manila-"$i"-"$j"
-done
-done
-
-```
+<script src="https://gist.github.com/greatbn/0bd09b58b0d389a377846ba0ec6f491c.js"></script>
 
 
 
