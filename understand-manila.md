@@ -50,12 +50,18 @@ Notes: Mình mới test thử trên Openstack L2-Agent sử dụng OpenvSwitch c
 
 #####LVM
 
+Trên node cài manila-share ta cần cài thêm gói lvm2 và nfs-kernel-server. Do vậy manila-share sẽ trực tiếp quản lý các volume trên host này. Để mở rộng ta sẽ phải cài manila-share trên tất cả các node LVM.
+
+Mô hình
+<img src="http://i.imgur.com/4K8lnyR.png">
+
 - Với backend là LVM ta sẽ cần tạo ra một Volume Group và khai báo Volume Group này cho manila-share
 
-- Trên node cài manila-share ta cần cài thêm gói lvm2 và nfs-kernel-server
 
 ```
- apt-get install lvm2 nfs-kernel-server -y
+add-apt-repository cloud-archive:mitaka
+apt-get update
+apt-get install manila-share python-pymysql lvm2 nfs-kernel-server -y
 
 ```
 
@@ -68,7 +74,7 @@ vgcreate manila-volumes /dev/sdb
 
 ```
 
-<img src="">
+<img src="http://i.imgur.com/0Xav3mA.png">
 
 - Đặt filter cho LVM. Bởi vì mặc định LVM sẽ scan trong thư mục /dev của  các thiết bị block storage device mà bao gồm các volume. Nếu các project sử dụng LVM trên những volume của họ, tool scan sẽ phát hiện những volume đó và cố gắng để cache chúng, do vậy nó có thể gây ra nhiều vấn đề với cả OS và project volume. Cấu hình để LVM chỉ scan ổ có manila-volumes volume group.
 
@@ -99,7 +105,7 @@ share_backend_name = LVM-1 # tên backend
 share_driver = manila.share.drivers.lvm.LVMShareDriver # driver sử dụng
 driver_handles_share_servers = False # False: driver không xử lý share server
 lvm_share_volume_group = manila-volumes  ## tên volume group vừa tạo ở trên
-lvm_share_export_ip = 172.16.25.134 ## IP sẽ expose cho các instance kết nối đến. mình sẽ dùng IP external do vậy các instance có     #thể kết nối đến được
+lvm_share_export_ip = 172.16.25.148 ## IP sẽ expose cho các instance kết nối đến. mình sẽ dùng IP external do vậy các instance có     #thể kết nối đến được
 
 ```
 - Restart manila-share
@@ -114,6 +120,7 @@ service manila-share restart
 ```
 manila service-list
 ```
+<img src="http://i.imgur.com/COhh0vb.png">
 
 - Tạo share-type DHSS = False nếu chưa tạo
 
@@ -123,34 +130,70 @@ manila type-create lvm False
 
 ```
 
+<img src="http://i.imgur.com/9jrTIxe.png">
+
 - Để chỉ định 1 backend trên share-type nào đó ta thực hiện như sau
 
 ```
-manila type-key lvm set share_backend_name=lvm1
+manila type-key lvm set share_backend_name=LVM-1
 ```
 
-- Tạo một share
+Kiểm tra các extra-specs
+
+<img src="http://i.imgur.com/KezlTv4.png">
+
+- Tạo một share dùng giao thức NFS kích thước 4GB , sử dụng backend lvm và có tên là `share-lvm-1`
 
 
 ```
-manila create nfs 4 --name test-share-1 --share-type lvm
+manila create nfs 4 --name share-lvm-1 --share-type lvm
 
 ```
         - NFS là protocol
         - 4 là kích thước (GB)
         - `--name`: tên của share
         - `--share-type` chọn share-type
-- Để list các share
-
-```
-manila list
-
-```
 
 - Sau khi tạo share ta cần một đường dẫn để mount trên client
 
 ```
-manila show test-share-1
+root@controller:/home/saphi# manila show share-lvm-1
++-----------------------------+-------------------------------------------------------------------------------------+
+| Property                    | Value                                                                               |
++-----------------------------+-------------------------------------------------------------------------------------+
+| status                      | available                                                                           |
+| share_type_name             | lvm                                                                                 |
+| description                 | None                                                                                |
+| availability_zone           | nova                                                                                |
+| share_network_id            | None                                                                                |
+| export_locations            |                                                                                     |
+|                             | path = 172.16.25.148:/var/lib/manila/mnt/share-ac9cd421-6f33-492f-8094-2dc21640bcb0 |
+|                             | preferred = False                                                                   |
+|                             | is_admin_only = False                                                               |
+|                             | id = adc5a28e-fa64-464c-ac04-75aaa16911c6                                           |
+|                             | share_instance_id = ac9cd421-6f33-492f-8094-2dc21640bcb0                            |
+| share_server_id             | None                                                                                |
+| host                        | storage@lvm1#lvm-single-pool                                                        |
+| access_rules_status         | active                                                                              |
+| snapshot_id                 | None                                                                                |
+| is_public                   | False                                                                               |
+| task_state                  | None                                                                                |
+| snapshot_support            | True                                                                                |
+| id                          | 7e478fbb-4867-4002-b9b5-34a56d585af0                                                |
+| size                        | 4                                                                                   |
+| name                        | share-lvm-1                                                                         |
+| share_type                  | 79f0d08e-edc9-4409-9902-28cc69ad4d16                                                |
+| has_replicas                | False                                                                               |
+| replication_type            | None                                                                                |
+| created_at                  | 2016-06-05T12:12:35.000000                                                          |
+| share_proto                 | NFS                                                                                 |
+| consistency_group_id        | None                                                                                |
+| source_cgsnapshot_member_id | None                                                                                |
+| project_id                  | 2dbc33e520b84b8ab550b649099d7972                                                    |
+| metadata                    | {}                                                                                  |
++-----------------------------+-------------------------------------------------------------------------------------+
+root@controller:/home/saphi#
+ 
 
 ```
 
@@ -158,20 +201,41 @@ manila show test-share-1
 
 
 ```
-manila access-allow test-share-1 ip IP_CLIENT
+root@controller:/home/saphi# manila access-allow share-lvm-1 ip 172.16.25.153
++--------------+--------------------------------------+
+| Property     | Value                                |
++--------------+--------------------------------------+
+| share_id     | 7e478fbb-4867-4002-b9b5-34a56d585af0 |
+| access_type  | ip                                   |
+| access_to    | 172.16.25.153                        |
+| access_level | rw                                   |
+| state        | new                                  |
+| id           | 272ff935-0b5c-4181-b802-48bf9c4e30d1 |
++--------------+--------------------------------------+
+
 
 ```
+*Lưu ý: Các instance khi  mount phải được floating IPs vì LVM sẽ kiểm tra việc được truy cập hay không dựa trên IP này*
+
+- Thực hiện mount trên 1 instance
+
+<img src="http://i.imgur.com/GjsvLNS.png">
 
 - Để delete share
 
 ```
 manila delete test-share-1
 ```
+
 #####Generic Driver
 
 - Yêu cầu khi sử dụng Generic Driver là bạn phải có cấu hình nova, neutron và cinder trong file cấu hình `/etc/manila/manila.conf` trên node manila-share
 
 - Và trên node manila share sẽ cần cài đặt L2 Agent. ở đây mình sử dụng OpenvSwitch. Mình sẽ cài đặt manila-share trên node compute để không phải cấu hình lại openvswitch.
+
+Mô hình cài đặt
+
+<img src="http://i.imgur.com/D0Zk5uP.png">
 
 - Ta sẽ cần một image có sẵn share service. Tải image về từ openstack foundation
 
@@ -193,6 +257,13 @@ openstack flavor create manila-service-flavor --id 100 --ram 256 --disk 0 --vcpu
 
 ```
 
+- Kiểm tra image
+
+```
+openstack image list
+```
+
+<img src="http://i.imgur.com/xQSLoyY.png">
 
 - Thêm các mục sau vào `/etc/manila/manila.conf`. *Sửa lại password các user*
 
@@ -272,19 +343,135 @@ service manila-share restart
 manila service-list
 ```
 
+<img src="http://i.imgur.com/qf1e3sm.png">
+
 - Tạo share-type và share-network
 
 ```
 manila type-create generic True
 
 ```
+
+
 True ở đây có nghĩa là `Driver Handling Share Servers = True`
+
+<img src="http://i.imgur.com/MOt0QWR.png">
 
 - Với Share-network ta sẽ cần net-id và subnet-id của project.
 
 ```
-neutron net-list
+root@controller:/home/saphi# neutron net-list
++--------------------------------------+------------------------+------------------------------------------------------+
+| id                                   | name                   | subnets                                              |
++--------------------------------------+------------------------+------------------------------------------------------+
+| 85caa7b4-1212-4037-b350-5e2db386b416 | private_demo           | f5c151cd-5baa-4628-b8dc-43963115adc7 192.168.2.0/24  |
+| 56fc4f98-ddc9-49a0-a014-5b86f7d99f82 | ext-net                | a1bb678f-d630-4c1a-8053-7af2676e2b94 172.16.25.0/24  |
+| 9af94508-21a7-4c3f-b126-04adf719ec19 | private-net            | a6b97594-0338-4f99-beea-cd0d0d07363b 192.168.10.0/24 |
++--------------------------------------+------------------------+------------------------------------------------------ 
 ```
+Mình đang ở project admin do vậy sẽ lấy subnet và net id của admin là dải `private-net`
+
+```
+root@controller:/home/saphi# manila share-network-create --name share-net-admin --neutron-subnet-id a6b97594-0338-4f99-beea-cd0d0d07363b --neutron-net-id 9af94508-21a7-4c3f-b126-04adf719ec19
++-------------------+--------------------------------------+
+| Property          | Value                                |
++-------------------+--------------------------------------+
+| name              | share-net-admin                      |
+| segmentation_id   | None                                 |
+| created_at        | 2016-06-05T11:02:17.209356           |
+| neutron_subnet_id | a6b97594-0338-4f99-beea-cd0d0d07363b |
+| updated_at        | None                                 |
+| network_type      | None                                 |
+| neutron_net_id    | 9af94508-21a7-4c3f-b126-04adf719ec19 |
+| ip_version        | None                                 |
+| nova_net_id       | None                                 |
+| cidr              | None                                 |
+| project_id        | 2dbc33e520b84b8ab550b649099d7972     |
+| id                | 9a295209-63d7-4637-9efc-f6317e7bff8a |
+| description       | None                                 |
++-------------------+--------------------------------------+
+root@controller:/home/saphi#
+ 
+```
+
+Kiểm tra share network đã tạo ra
+
+<img src="http://i.imgur.com/XhbbA8Y.png">
+
+Ta cũng thấy rằng sẽ có một mạng và subnet mới được tạo ra  với tên `manila_service_network `
+
+<img src="http://i.imgur.com/j9cZc7i.png">
+
+
+Thực hiện tạo share server sử dụng giao thức NFS và kích thước share 1GB có tên share-01
+
+```
+manila create nfs 1 --share-network share-net-admin --name share-01 
+
+```
+
+Và sau đó ta sẽ có share server
+
+<img src="http://i.imgur.com/Ldol4lM.png">
+
+Mình đang có một instance `sa` trên project admin có IP `192.168.10.7`
+```
+root@controller:/home/saphi# openstack server list
++--------------------------------------+------+--------+--------------------------+
+| ID                                   | Name | Status | Networks                 |
++--------------------------------------+------+--------+--------------------------+
+| dbf12e7f-1fec-4817-8a39-e7100835f092 | sa   | ACTIVE | private-net=192.168.10.7 |
++--------------------------------------+------+--------+--------------------------+
+ 
+```
+Tạo access-allow cho instance trên vào share `share-01`
+
+<img src="http://i.imgur.com/NNSLOy8.png">
+
+Để lấy đường dẫn mount `manila show share-01`
+
+```
+root@controller:/home/saphi# manila show share-01
++-----------------------------+-----------------------------------------------------------------------+
+| Property                    | Value                                                                 |
++-----------------------------+-----------------------------------------------------------------------+
+| status                      | available                                                             |
+| share_type_name             | default_share_type                                                    |
+| description                 | None                                                                  |
+| availability_zone           | nova                                                                  |
+| share_network_id            | 9a295209-63d7-4637-9efc-f6317e7bff8a                                  |
+| export_locations            |                                                                       |
+|                             | path = 10.254.0.12:/shares/share-d7287607-4750-4874-b3ca-bd9c734cee0e |
+|                             | preferred = False                                                     |
+|                             | is_admin_only = False                                                 |
+|                             | id = 0db97dd9-0af2-49fb-907e-854263727995                             |
+|                             | share_instance_id = d7287607-4750-4874-b3ca-bd9c734cee0e              |
+| share_server_id             | 25c6e835-5dbe-4bbb-8451-29df0805aaef                                  |
+| host                        | compute1@generic#GENERIC                                              |
+| access_rules_status         | active                                                                |
+| snapshot_id                 | None                                                                  |
+| is_public                   | False                                                                 |
+| task_state                  | None                                                                  |
+| snapshot_support            | True                                                                  |
+| id                          | fd6574cc-ac43-4f8d-bfd1-22edbf1bf113                                  |
+| size                        | 1                                                                     |
+| name                        | share-01                                                              |
+| share_type                  | 4d7aca95-a7d0-4d66-9036-7e7e876d8c4c                                  |
+| has_replicas                | False                                                                 |
+| replication_type            | None                                                                  |
+| created_at                  | 2016-06-05T11:06:50.000000                                            |
+| share_proto                 | NFS                                                                   |
+| consistency_group_id        | None                                                                  |
+| source_cgsnapshot_member_id | None                                                                  |
+| project_id                  | 2dbc33e520b84b8ab550b649099d7972                                      |
+| metadata                    | {}                                                                    |
++-----------------------------+-----------------------------------------------------------------------+
+ 
+```
+Trên instance `sa` thưc hiện mount
+
+<img src="http://i.imgur.com/mqCH11c.png">
+
 
 
 #####Native GlusterFS Driver
@@ -292,15 +479,49 @@ neutron net-list
 - Yêu cầu phiên bản GlusterFS >= 3.6. Với glusterfs nếu cluster của bạn không hỗ trợ snapshot thì trên manila cũng sẽ mất đi tính năng này. Để cấu hình snapshot ta sẽ cấu hình Thin Provision theo bài hướng dẫn link
 
 - Với bài lab của mình có 2 node và chạy kiểu replicate. Mình sẽ tạo các thinly provisioned và tạo volume trên đó.
+
+Mô hình cài đặt
+
+<img src="http://i.imgur.com/J4NlcLL.png">
+
 Tham khảo 2 script sau.
 
 Script tạo thinly provisioned chạy trên 2 node
-<script src="https://gist.github.com/greatbn/506d0aee6135071744154a10328ef70d.js"></script>
+```
+apt-get install xfsprogs -y
+pvcreate /dev/sdb
+vgcreate myVG /dev/sdb
+lvcreate -L 8G -T myVG/thinpool
+for ((i = 1;i<= 5; i++ ))
+do
+mkdir -p /manila/manila-"$i"
+for (( j = 1; j<= 5; j++))
+do
+lvcreate -V "${i}"Gb -T myVG/thinpool -n vol-"$i"-"$j"
+mkfs.xfs /dev/myVG/vol-"$i"-"$j"
+mkdir -p /manila/manila-"$i"/manila-"$j"
+mount /dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j"
+echo "/dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j" xfs 0 2" >> /etc/fstab
+done
+done
+
+```
+
+
 Tạo gluster volume chỉ cần chạy trên 1 node
-<script src="https://gist.github.com/greatbn/0bd09b58b0d389a377846ba0ec6f491c.js"></script>
 
+```
 
+for (( i= 1 ; i <= 5; i++))
+do
+for(( j= 1; j<=5 ;j++))
+do
+gluster volume create manila-"$i"-"$j" replica 2 glusterfs-1:/manila/manila-"$i"/manila-"$j"/br glusterfs-2:/manila/manila-"$i"/manila-"$j"/br
+gluster volume start manila-"$i"-"$j"
+done
+done
 
+```
 
 - Cấu hình GlusterFS tương tự như LVM mình sẽ sử dụng node compute để cài manila-share.
 
