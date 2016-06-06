@@ -48,184 +48,7 @@ Notes: Mình mới test thử trên Openstack L2-Agent sử dụng OpenvSwitch c
 - Các cấu hình dưới đây được thực hiện trên Ubuntu 14.04
 - Riêng Ganesha-server được cài trên Centos 7.2
 
-#####LVM
 
-Trên node cài manila-share ta cần cài thêm gói lvm2 và nfs-kernel-server. Do vậy manila-share sẽ trực tiếp quản lý các volume trên host này. Để mở rộng ta sẽ phải cài manila-share trên tất cả các node LVM.
-
-Mô hình
-<img src="http://i.imgur.com/4K8lnyR.png">
-
-- Với backend là LVM ta sẽ cần tạo ra một Volume Group và khai báo Volume Group này cho manila-share
-
-
-```
-add-apt-repository cloud-archive:mitaka
-apt-get update
-apt-get install manila-share python-pymysql lvm2 nfs-kernel-server -y
-
-```
-
-- Mình sẽ add thêm một ổ cứng để tạo Volume Group trên ổ cứng này.
-
-- Thực hiện tạo volume group
-```
-pvcreate /dev/sdb
-vgcreate manila-volumes /dev/sdb
-
-```
-
-<img src="http://i.imgur.com/0Xav3mA.png">
-
-- Đặt filter cho LVM. Bởi vì mặc định LVM sẽ scan trong thư mục /dev của  các thiết bị block storage device mà bao gồm các volume. Nếu các project sử dụng LVM trên những volume của họ, tool scan sẽ phát hiện những volume đó và cố gắng để cache chúng, do vậy nó có thể gây ra nhiều vấn đề với cả OS và project volume. Cấu hình để LVM chỉ scan ổ có manila-volumes volume group.
-
-Mở file /etc/lvm/lvm.conf tìm dòng sau
-
-```
-filter = ["a/sdb","r/.*a/"]
-
-```
-
-*Với a là allow còn r là reject với cấu hình này ta sẽ chỉ cho phép scan trên ổ sdb*
-
-- Cấu hình manila-share. Ta mở file /etc/manila/manila.conf và cấu hình như sau
-
-Thêm vào phần [DEFAULT] như sau
-
-```
-enabled_share_backends = lvm1  # lvm1 là tên backend
-enabled_share_protocols = NFS,CIFS # giao thức cho phép là NFS và CIFS
-
-```
-
-Tạo backend lvm1, ta thêm một phần [lvm1] như sau
-
-```
-[lvm1]
-share_backend_name = LVM-1 # tên backend
-share_driver = manila.share.drivers.lvm.LVMShareDriver # driver sử dụng
-driver_handles_share_servers = False # False: driver không xử lý share server
-lvm_share_volume_group = manila-volumes  ## tên volume group vừa tạo ở trên
-lvm_share_export_ip = 172.16.25.148 ## IP sẽ expose cho các instance kết nối đến. mình sẽ dùng IP external do vậy các instance có     #thể kết nối đến được
-
-```
-- Restart manila-share
-
-```
-service manila-share restart
-
-```
-
-- Ta kiểm tra service manila-share đã up chưa bằng lệnh
-
-```
-manila service-list
-```
-<img src="http://i.imgur.com/COhh0vb.png">
-
-- Tạo share-type DHSS = False nếu chưa tạo
-
-```
-
-manila type-create lvm False
-
-```
-
-<img src="http://i.imgur.com/9jrTIxe.png">
-
-- Để chỉ định 1 backend trên share-type nào đó ta thực hiện như sau
-
-```
-manila type-key lvm set share_backend_name=LVM-1
-```
-
-Kiểm tra các extra-specs
-
-<img src="http://i.imgur.com/KezlTv4.png">
-
-- Tạo một share dùng giao thức NFS kích thước 4GB , sử dụng backend lvm và có tên là `share-lvm-1`
-
-
-```
-manila create nfs 4 --name share-lvm-1 --share-type lvm
-
-```
-        - NFS là protocol
-        - 4 là kích thước (GB)
-        - `--name`: tên của share
-        - `--share-type` chọn share-type
-
-- Sau khi tạo share ta cần một đường dẫn để mount trên client
-
-```
-root@controller:/home/saphi# manila show share-lvm-1
-+-----------------------------+-------------------------------------------------------------------------------------+
-| Property                    | Value                                                                               |
-+-----------------------------+-------------------------------------------------------------------------------------+
-| status                      | available                                                                           |
-| share_type_name             | lvm                                                                                 |
-| description                 | None                                                                                |
-| availability_zone           | nova                                                                                |
-| share_network_id            | None                                                                                |
-| export_locations            |                                                                                     |
-|                             | path = 172.16.25.148:/var/lib/manila/mnt/share-ac9cd421-6f33-492f-8094-2dc21640bcb0 |
-|                             | preferred = False                                                                   |
-|                             | is_admin_only = False                                                               |
-|                             | id = adc5a28e-fa64-464c-ac04-75aaa16911c6                                           |
-|                             | share_instance_id = ac9cd421-6f33-492f-8094-2dc21640bcb0                            |
-| share_server_id             | None                                                                                |
-| host                        | storage@lvm1#lvm-single-pool                                                        |
-| access_rules_status         | active                                                                              |
-| snapshot_id                 | None                                                                                |
-| is_public                   | False                                                                               |
-| task_state                  | None                                                                                |
-| snapshot_support            | True                                                                                |
-| id                          | 7e478fbb-4867-4002-b9b5-34a56d585af0                                                |
-| size                        | 4                                                                                   |
-| name                        | share-lvm-1                                                                         |
-| share_type                  | 79f0d08e-edc9-4409-9902-28cc69ad4d16                                                |
-| has_replicas                | False                                                                               |
-| replication_type            | None                                                                                |
-| created_at                  | 2016-06-05T12:12:35.000000                                                          |
-| share_proto                 | NFS                                                                                 |
-| consistency_group_id        | None                                                                                |
-| source_cgsnapshot_member_id | None                                                                                |
-| project_id                  | 2dbc33e520b84b8ab550b649099d7972                                                    |
-| metadata                    | {}                                                                                  |
-+-----------------------------+-------------------------------------------------------------------------------------+
-root@controller:/home/saphi#
- 
-
-```
-
-- Để client có thể mount được ta cần cấu hình access-allow. Với LVM sẽ là dựa trên địa chỉ IP, mặc định sẽ có quyền RW ta có thể thay đổi bằng thêm option `--access-level LEVEL` (RW, RO)
-
-
-```
-root@controller:/home/saphi# manila access-allow share-lvm-1 ip 172.16.25.153
-+--------------+--------------------------------------+
-| Property     | Value                                |
-+--------------+--------------------------------------+
-| share_id     | 7e478fbb-4867-4002-b9b5-34a56d585af0 |
-| access_type  | ip                                   |
-| access_to    | 172.16.25.153                        |
-| access_level | rw                                   |
-| state        | new                                  |
-| id           | 272ff935-0b5c-4181-b802-48bf9c4e30d1 |
-+--------------+--------------------------------------+
-
-
-```
-*Lưu ý: Các instance khi  mount phải được floating IPs vì LVM sẽ kiểm tra việc được truy cập hay không dựa trên IP này*
-
-- Thực hiện mount trên 1 instance
-
-<img src="http://i.imgur.com/GjsvLNS.png">
-
-- Để delete share
-
-```
-manila delete test-share-1
-```
 
 #####Generic Driver
 
@@ -254,7 +77,6 @@ openstack image create "manila-service-image" \
 --public
 
 openstack flavor create manila-service-flavor --id 100 --ram 256 --disk 0 --vcpus 1
-
 ```
 
 - Kiểm tra image
@@ -306,7 +128,6 @@ region_name = RegionOne
 project_name = service
 username = neutron
 password = saphi
-
 ```
 
 - Khai báo backend sử dụng, Thêm vào phần [DEFAULT] như sau
@@ -329,7 +150,6 @@ service_instance_user = manila # user đăng nhập share server
 service_instance_password = manila # password đăng nhập share server
 #interface_driver = manila.network.linux.interface.BridgeInterfaceDriver # nếu sử dụng LinuxBridge thì uncomment
 interface_driver = manila.network.linux.interface.OVSInterfaceDriver # sử dụng driver cho OpenVswitch
-
 ```
 - Reset lại dịch vụ manila-share
 
@@ -349,7 +169,6 @@ manila service-list
 
 ```
 manila type-create generic True
-
 ```
 
 
@@ -390,8 +209,6 @@ root@controller:/home/saphi# manila share-network-create --name share-net-admin 
 | id                | 9a295209-63d7-4637-9efc-f6317e7bff8a |
 | description       | None                                 |
 +-------------------+--------------------------------------+
-root@controller:/home/saphi#
- 
 ```
 
 Kiểm tra share network đã tạo ra
@@ -407,7 +224,6 @@ Thực hiện tạo share server sử dụng giao thức NFS và kích thước 
 
 ```
 manila create nfs 1 --share-network share-net-admin --name share-01 
-
 ```
 
 Và sau đó ta sẽ có share server
@@ -422,7 +238,6 @@ root@controller:/home/saphi# openstack server list
 +--------------------------------------+------+--------+--------------------------+
 | dbf12e7f-1fec-4817-8a39-e7100835f092 | sa   | ACTIVE | private-net=192.168.10.7 |
 +--------------------------------------+------+--------+--------------------------+
- 
 ```
 Tạo access-allow cho instance trên vào share `share-01`
 
@@ -466,13 +281,177 @@ root@controller:/home/saphi# manila show share-01
 | project_id                  | 2dbc33e520b84b8ab550b649099d7972                                      |
 | metadata                    | {}                                                                    |
 +-----------------------------+-----------------------------------------------------------------------+
- 
 ```
 Trên instance `sa` thưc hiện mount
 
 <img src="http://i.imgur.com/mqCH11c.png">
 
+#####LVM
 
+Trên node cài manila-share ta cần cài thêm gói lvm2 và nfs-kernel-server. Do vậy manila-share sẽ trực tiếp quản lý các volume trên host này. Để mở rộng ta sẽ phải cài manila-share trên tất cả các node LVM.
+
+Mô hình
+
+<img src="http://i.imgur.com/4K8lnyR.png">
+
+- Với backend là LVM ta sẽ cần tạo ra một Volume Group và khai báo Volume Group này cho manila-share
+
+- Cài đặt các thành phần
+
+```
+add-apt-repository cloud-archive:mitaka
+apt-get update
+apt-get install manila-share python-pymysql lvm2 nfs-kernel-server -y
+```
+
+- Mình sẽ add thêm một ổ cứng để tạo Volume Group trên ổ cứng này.
+
+- Thực hiện tạo volume group
+```
+pvcreate /dev/sdb
+vgcreate manila-volumes /dev/sdb
+```
+
+<img src="http://i.imgur.com/0Xav3mA.png">
+
+- Đặt filter cho LVM. Bởi vì mặc định LVM sẽ scan trong thư mục /dev của  các thiết bị block storage device mà bao gồm các volume. Nếu các project sử dụng LVM trên những volume của họ, tool scan sẽ phát hiện những volume đó và cố gắng để cache chúng, do vậy nó có thể gây ra nhiều vấn đề với cả OS và project volume. Cấu hình để LVM chỉ scan ổ có manila-volumes volume group.
+
+Mở file `/etc/lvm/lvm.conf` tìm dòng sau
+
+```
+filter = ["a/sdb","r/.*a/"]
+```
+
+*Với a là allow còn r là reject với cấu hình này ta sẽ chỉ cho phép scan trên ổ sdb*
+
+- Cấu hình manila-share. Ta mở file /etc/manila/manila.conf và cấu hình như sau
+
+Thêm vào phần [DEFAULT] như sau
+
+```
+enabled_share_backends = lvm1  # lvm1 là tên backend
+enabled_share_protocols = NFS,CIFS # giao thức cho phép là NFS và CIFS
+```
+
+Tạo backend lvm1, ta thêm một phần [lvm1] như sau
+
+```
+[lvm1]
+share_backend_name = LVM-1 # tên backend
+share_driver = manila.share.drivers.lvm.LVMShareDriver # driver sử dụng
+driver_handles_share_servers = False # False: driver không xử lý share server
+lvm_share_volume_group = manila-volumes  ## tên volume group vừa tạo ở trên
+lvm_share_export_ip = 172.16.25.148 ## IP sẽ expose cho các instance kết nối đến. mình sẽ dùng IP external do vậy các instance có thể kết nối đến được
+```
+- Restart manila-share
+
+```
+service manila-share restart
+```
+
+- Ta kiểm tra service manila-share đã up chưa bằng lệnh
+
+```
+manila service-list
+```
+<img src="http://i.imgur.com/COhh0vb.png">
+
+- Tạo share-type DHSS = False nếu chưa tạo
+
+```
+manila type-create lvm False
+```
+
+<img src="http://i.imgur.com/9jrTIxe.png">
+
+- Để chỉ định 1 backend trên share-type nào đó ta thực hiện như sau
+
+```
+manila type-key lvm set share_backend_name=LVM-1
+```
+
+Kiểm tra các extra-specs
+
+<img src="http://i.imgur.com/KezlTv4.png">
+
+- Tạo một share dùng giao thức NFS kích thước 4GB , sử dụng backend lvm và có tên là `share-lvm-1`
+
+
+```
+manila create nfs 4 --name share-lvm-1 --share-type lvm
+```
+        - NFS là protocol
+        - 4 là kích thước (GB)
+        - `--name`: tên của share
+        - `--share-type` chọn share-type
+
+- Sau khi tạo share ta cần một đường dẫn để mount trên client
+
+```
+root@controller:/home/saphi# manila show share-lvm-1
++-----------------------------+-------------------------------------------------------------------------------------+
+| Property                    | Value                                                                               |
++-----------------------------+-------------------------------------------------------------------------------------+
+| status                      | available                                                                           |
+| share_type_name             | lvm                                                                                 |
+| description                 | None                                                                                |
+| availability_zone           | nova                                                                                |
+| share_network_id            | None                                                                                |
+| export_locations            |                                                                                     |
+|                             | path = 172.16.25.148:/var/lib/manila/mnt/share-ac9cd421-6f33-492f-8094-2dc21640bcb0 |
+|                             | preferred = False                                                                   |
+|                             | is_admin_only = False                                                               |
+|                             | id = adc5a28e-fa64-464c-ac04-75aaa16911c6                                           |
+|                             | share_instance_id = ac9cd421-6f33-492f-8094-2dc21640bcb0                            |
+| share_server_id             | None                                                                                |
+| host                        | storage@lvm1#lvm-single-pool                                                        |
+| access_rules_status         | active                                                                              |
+| snapshot_id                 | None                                                                                |
+| is_public                   | False                                                                               |
+| task_state                  | None                                                                                |
+| snapshot_support            | True                                                                                |
+| id                          | 7e478fbb-4867-4002-b9b5-34a56d585af0                                                |
+| size                        | 4                                                                                   |
+| name                        | share-lvm-1                                                                         |
+| share_type                  | 79f0d08e-edc9-4409-9902-28cc69ad4d16                                                |
+| has_replicas                | False                                                                               |
+| replication_type            | None                                                                                |
+| created_at                  | 2016-06-05T12:12:35.000000                                                          |
+| share_proto                 | NFS                                                                                 |
+| consistency_group_id        | None                                                                                |
+| source_cgsnapshot_member_id | None                                                                                |
+| project_id                  | 2dbc33e520b84b8ab550b649099d7972                                                    |
+| metadata                    | {}                                                                                  |
++-----------------------------+-------------------------------------------------------------------------------------+
+```
+
+- Để client có thể mount được ta cần cấu hình access-allow. Với LVM sẽ là dựa trên địa chỉ IP, mặc định sẽ có quyền RW ta có thể thay đổi bằng thêm option `--access-level LEVEL` (RW, RO)
+
+
+```
+root@controller:/home/saphi# manila access-allow share-lvm-1 ip 172.16.25.153
++--------------+--------------------------------------+
+| Property     | Value                                |
++--------------+--------------------------------------+
+| share_id     | 7e478fbb-4867-4002-b9b5-34a56d585af0 |
+| access_type  | ip                                   |
+| access_to    | 172.16.25.153                        |
+| access_level | rw                                   |
+| state        | new                                  |
+| id           | 272ff935-0b5c-4181-b802-48bf9c4e30d1 |
++--------------+--------------------------------------+
+```
+*Lưu ý: Các instance khi  mount phải được floating IPs vì LVM sẽ kiểm tra việc được truy cập hay không dựa trên IP này*
+
+- Thực hiện mount trên 1 instance
+
+<img src="http://i.imgur.com/GjsvLNS.png">
+
+- Để delete share
+
+```
+manila delete test-share-1
+```
 
 #####Native GlusterFS Driver
 
@@ -484,7 +463,16 @@ Mô hình cài đặt
 
 <img src="http://i.imgur.com/J4NlcLL.png">
 
-Tham khảo 2 script sau.
+Cài đặt glusterfs-v3.7
+
+```
+add-apt-repository ppa:gluster/glusterfs-3.7 -y
+apt-get update
+apt-get install glusterfs-server -y
+
+```
+
+Tham khảo script tạo thin LV và gluster volume
 
 Script tạo thinly provisioned chạy trên 2 node
 ```
@@ -504,14 +492,12 @@ mount /dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j"
 echo "/dev/myVG/vol-"$i"-"$j" /manila/manila-"$i"/manila-"$j" xfs 0 2" >> /etc/fstab
 done
 done
-
 ```
 
 
 Tạo gluster volume chỉ cần chạy trên 1 node
 
 ```
-
 for (( i= 1 ; i <= 5; i++))
 do
 for(( j= 1; j<=5 ;j++))
@@ -523,25 +509,40 @@ done
 
 ```
 
+- Với backend là GlusterFS việc quản lý truy cập vào share file trên manila sẽ thông qua certificate do vậy ta cần cấu hình SSL cho client và server.
+
+Tạo key và CA trên server. Mình sẽ copy key và ca tới tất cả server glusterfs
+```
+cd /etc/ssl
+openssl genrsa -out glusterfs.key 1024
+openssl req -new -x509 -key glusterfs.key -subj /CN=saphi -out glusterfs.pem
+cp glusterfs.pem glusterfs.ca
+```
+
+Ở đây ta tạo CA có `CN=saphi` trên manila ta sẽ tạo access-allow cho CA của `saphi`
+
+
+
 - Cấu hình GlusterFS tương tự như LVM mình sẽ sử dụng node compute để cài manila-share.
 
-- Trên node này ta cần cài glusterfs-client
 
-######Cấu hình manila-share tại file `/etc/manila/manila.conf`
 
-- enable backend glusterfsnative và protocol GLUSTERFS tại mục [DEFAULT]
+
+Cấu hình manila-share tại file `/etc/manila/manila.conf`
+
+Enable backend glusterfsnative và protocol GLUSTERFS tại mục [DEFAULT]
 
 ```
 enabled_share_backends= glusterfsnative #glusterfsnative là tên phần backend
 enabled_share_protocols=NFS,CIFS,GLUSTERFS #giao thức cho phép
 
 ```
-- Cấu hình backend glusterfsnative như sau
+Cấu hình backend glusterfsnative như sau
 
 ```
 [glusterfsnative]
 share_backend_name = glusterfsnative # tên backend
-glusterfs_servers = root@glusterfs-1 # khai báo user,IP của gluster server, nếu có nhiều server glusterfs cách nhau bằng dấu phẩy
+glusterfs_servers = root@glusterfs1 # khai báo user,IP của gluster server, nếu có nhiều server glusterfs cách nhau bằng dấu phẩy
 glusterfs_server_password = saphi # password để manila-host ssh vào glusterfs server
 glusterfs_volume_pattern = manila-#{size}-.* # pattern volume trên manila khi tạo share mapping với volume trên glusterfs
 share_driver = manila.share.drivers.glusterfs.glusterfs_native.GlusterfsNativeShareDriver # share driver sử dụng
@@ -549,7 +550,7 @@ driver_handles_share_servers = False  # False: không sử dụng driver xử l�
  
 ```
 
-Nói thêm phần volume-pattern:
+Nói thêm về volume-pattern:
 
 Với script ở trên mình đã tạo các volume có mẫu `manila-$i-$j` với $i là size của volume và $j là số thứ tự. Do vậy ta sẽ cấu hình mẫu để các share manila khi tạo ra sẽ mapping với các volume trên glusterfs.
 
@@ -561,6 +562,22 @@ service manila-share restart
 
 - Kiểm tra service manila sẽ có thêm service cho glusterfsnative
 
+<img src="http://i.imgur.com/wjUPlEq.png">
+
+- Trên node `controller` cần phải enable protocol `GLUSTERFS` vì mặc định chỉ enable `NFS` và `CIFS`
+
+thêm dòng sau vào mục [DEFAULT] trong `/etc/manila/manila.conf`
+
+```
+enabled_share_protocols=NFS,CIFS,GLUSTERFS
+```
+sau đó restart lại manila
+
+```
+service manila-api restart
+service manila-scheduler restart
+```
+
 - Tạo share-type
 
 ```
@@ -568,10 +585,110 @@ manila type-create glusterfsnative False # tạo type tên là glusterfsnative D
 manila type-key glusterfsnative set share_backend_name=glusterfsnative # khai báo backend cho type này
 ```
 
+<img src="http://i.imgur.com/qhm59tZ.png">
+
 - Tạo share
 
 ```
 manila create glusterfs 2 --name gluster-1 --share-type glusterfsnative
 ```
+<img src="http://i.imgur.com/dGb2Fkb.png">
+
+- Tạo access-allow cho CA có `CN=saphi`
+
+<img src="http://i.imgur.com/fB1RSH7.png">
+
+Ta thấy access-type ở đây là `cert`
+
+- Kiểm tra đường dẫn mount path
+
+<img src="http://i.imgur.com/CssIQzA.png">
+
+- Thực hiện mount trên client
+
+Client cần cài gói glusterfs-client
+
+```
+add-apt-repository ppa:gluster/glusterfs-3.7 -y
+apt-get update
+apt-get install glusterfs-client -y
+```
+
+Client cần  CA có `CN=saphi` và server phải biết CA này tôi sẽ copy key và CA trên server về client sau đó thực hiện mount
+
+```
+mount -t glusterfs glusterfs1:/manila-2-1 /mnt
+```
+
+<img src="http://i.imgur.com/lexNgpx.png">
+
 
 #####GlusterFS Driver with NFS-Ganesha làm gateway
+
+Sau khi cấu hình GlusterFS làm backend cho manila ta đã thấy một số nhược điểm
+
+- Là dạng Volume mapping do vậy ta sẽ phải thực hiện tạo các volume trước khi tạo share.
+- Nếu xem log các bạn có thể thấy để tạo một share thì manila-host sẽ phải SSH rất nhiều lần vào glusterfs-server(bằng số volume). Tham khảo log khi tạo share [manila-share.log](http://pastebin.com/vLMCPjmm)
+
+Có một lựa chọn là ta có thể sử dụng NFS-Ganesha làm gateway cho GlusterFS Server sẽ có những ưu điểm sau
+
+- Là dạng directory mapping, mỗi 1 share sẽ tạo ra 1 directory trên volume của glusterfs
+- Dễ dàng giới hạn kích thước share (Không cần tạo nhiều volume có kích thước khác nhau trên glusterfs do vậy không cần cấu hình volume pattern)
+
+
+Ta sẽ cần thêm 1 node cài nfs-ganesha server và mình sẽ sử dụng CentOS 7 để cài.
+Mô hình cài đặt sẽ như sau
+
+<img src="http://i.imgur.com/iiuSAJh.png">
+
+######Cài đặt
+
+- Cài đặt NFS-ganesha
+
+download repo nfs-ganesha và glusterfs
+
+```
+curl -o /etc/yum.repos.d/nfs-ganesha.repo http://download.gluster.org/pub/gluster/glusterfs/nfs-ganesha/2.3.0/EPEL.repo/nfs-ganesha.repo
+curl -o /etc/yum.repos.d/glusterfs-epel.repo http://download.gluster.org/pub/gluster/glusterfs/3.7/3.7.11/EPEL.repo/glusterfs-epel.repo
+```
+update repo
+
+```
+yum update
+```
+
+Cài đặt nfs-ganesha và glusterfs-client
+
+```
+yum -y install epel-release
+yum -y install glusterfs-ganesha
+```
+
+Tôi sẽ sử dụng 1 volume trên glusterfs server đã tạo ở phần trước là `manila-5-5` để cấu hình trên nfs-ganesha server.
+File cấu hình `/etc/ganesha/ganesha.conf` sẽ như sau
+
+```
+EXPORT
+{
+	# Export Id (bắt buộc, mỗi export có một đường Id)
+	Export_Id = 1;
+
+	# đường dẫn export (bắt buộc)
+	Path = /ganesha;
+
+	# đường dẫn Pseudo  (yêu cầu cho NFS v4)
+	Pseudo = /ganesha;
+
+	# Required for access (default is None)
+	# Could use CLIENT blocks instead
+	Access_Type = RW; # read/write
+
+	# Exporting FSAL
+	FSAL {
+		Name = GLUSTER; # File system abstract layer là GLUSTER
+		Hostname = "10.0.0.32"; # Ip, hostname của 1 node trong cụm glusterfs
+		Volume = manila-5-5; # ten volume
+	}
+}
+
+```
