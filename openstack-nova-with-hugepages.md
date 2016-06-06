@@ -8,7 +8,7 @@ Bài lab thực hiện trên phiên bản Openstack Mitaka và OS là Ubuntu 14.
 - Node compute của tôi 6GB RAM nên tôi sẽ sử dụng 4GB cho các instance sử dụng  Hugepages.
 
 - Để lưu giữ cấu hình hugepages ta cần thêm tham số vào khi khởi động ubuntu.
-tôi thêm dòng sau vào file `/etc/default/grub` 
+tôi thêm dòng sau vào file `/etc/default/grub`
 
 ```
 GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX hugepagesz=2M hugepages=2000 transparent_hugepage=never"
@@ -17,10 +17,13 @@ GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX hugepagesz=2M hugepages=2000 transparent
 
 - Update grub `update-grub`
 
+
 - Mount phân vùng `hugepages` khi khởi động tôi thêm dòng sau vào file `/etc/fstab`
 
 ```
-hugetlbfs    /hugepages    hugetlbfs    defaults    0 0
+mkdir /hugepages
+
+echo "hugetlbfs    /hugepages    hugetlbfs    defaults    0 0" >> /etc/fstab
 
 ```
 
@@ -30,6 +33,8 @@ hugetlbfs    /hugepages    hugetlbfs    defaults    0 0
 touch /etc/apparmor.d/disable/usr.sbin.libvirtd
 
 ```
+
+- Cấu hình libvirt sử dụng HUGEPAGES ta sửa `KVM_HUGEPAGES=1` trong file `/etc/default/qemu-kvm`
 
 - Reboot node compute
 
@@ -84,4 +89,3 @@ openstack server create --image cirros --flavor m1.tiny.hugepages --nic net-id=n
 - Kiểm tra file XML của instance `cirros-hugepages-demo`
 
 <img src="http://i.imgur.com/LaJ30a4.png">
-
