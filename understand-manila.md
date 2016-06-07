@@ -733,7 +733,8 @@ glusterfs_ganesha_server_password=saphi # password
 sau đó enable backend này lên
 
 ```
-
+enabled_share_backends = generic,ganesha
+enabled_share_protocols = NFS,CIFS,GLUSTERFS
 ```
 *Lưu ý:*
 
@@ -777,7 +778,7 @@ manila create nfs 2 --name share-2 --share-type ganesha
 
 <img src="http://i.imgur.com/0wVD1nU.png">
 
-Khi tạo một access ta thử kiểm tra file export theo như ID của share trên ganesha server tại đường dẫn `/etc/ganesha/export.d/`sẽ như sau
+Khi tạo một access ta thử kiểm tra file export share trên ganesha server tại đường dẫn `/etc/ganesha/export.d/`sẽ như sau
 
 <img src="http://i.imgur.com/D90X63q.png">
 
