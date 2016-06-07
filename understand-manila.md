@@ -664,20 +664,26 @@ yum -y install epel-release
 yum -y install glusterfs-ganesha
 ```
 
-Tôi sẽ sử dụng 1 volume trên glusterfs server đã tạo ở phần trước là `manila-5-5` để cấu hình trên nfs-ganesha server.
+Ta gluster server mình sẽ tạo một volume tên là `vol` để cấu hình trên ganesha
+Ta có thể disable nfs trên volume này
+
+```
+gluster volume set vol nfs.disbale on
+```
+
 File cấu hình `/etc/ganesha/ganesha.conf` sẽ như sau
 
 ```
 EXPORT
 {
 	# Export Id (bắt buộc, mỗi export có một đường Id)
-	Export_Id = 1;
+	Export_Id = 78;
 
 	# đường dẫn export (bắt buộc)
-	Path = /ganesha;
+	Path = /shared_storage;
 
 	# đường dẫn Pseudo  (yêu cầu cho NFS v4)
-	Pseudo = /ganesha;
+	Pseudo = /shared_storage;
 
 	# Required for access (default is None)
 	# Could use CLIENT blocks instead
@@ -686,9 +692,103 @@ EXPORT
 	# Exporting FSAL
 	FSAL {
 		Name = GLUSTER; # File system abstract layer là GLUSTER
-		Hostname = "10.0.0.32"; # Ip, hostname của 1 node trong cụm glusterfs
-		Volume = manila-5-5; # ten volume
+		Hostname = "10.0.0.28"; # Ip, hostname của 1 node trong cụm glusterfs
+		Volume =vol; # ten volume
 	}
 }
 
 ```
+
+- Khởi động lại nfs-ganesha
+
+```
+service nfs-ganesha restart
+```
+
+- Kiểm tra export
+
+```
+showmount -e localhost
+```
+
+<img src="http://i.imgur.com/J2nwYAj.png">
+
+- Cấu hình trên manila-share ở đây mình tiếp tục dùng node compute1 để chạy manila-share
+mở file `/etc/manila/manila.conf` thêm đoạn sau
+
+```
+[ganesha]
+share_backend_name = ganesha #tên backend
+glusterfs_nfs_server_type = Ganesha # sử dụng ganesha server
+glusterfs_target=root@10.0.0.28:/vol # user, IP(hostmame) , volume name của Gluster được cấu hình trên gluster
+glusterfs_server_password=saphi # password để login vào gluster server
+share_driver = manila.share.drivers.glusterfs.GlusterfsShareDriver # driver
+ganesha_service_name = nfs-ganesha # tên service của ganesha trên ganesha-server
+driver_handles_share_servers = False
+glusterfs_ganesha_server_ip=172.16.25.146 # IP của ganesha server
+glusterfs_ganesha_server_username=root # user để ssh
+glusterfs_ganesha_server_password=saphi # password
+```
+
+sau đó enable backend này lên
+
+```
+
+```
+*Lưu ý:*
+
+- Tại sao cần manila host cần ssh vào gluster? Bởi vì manila sẽ truy cập vào và đặt các quota cũng như các export trên volume đó. Ta có thể kiểm tra cmd_history trên glusterfs-server
+
+
+<img src="http://i.imgur.com/JAfuv1N.png">
+
+
+
+
+- Kiểm tra service manila
+
+```
+manila service-list
+```
+
+<img src="http://i.imgur.com/FImqfj7.png">
+
+- Tạo share type ta cần disable snapshot vì đây là dạng directory mapping do vậy ko hỗ trợ snapshot
+
+```
+
+manila type-create ganesha False
+manila type-key ganesha set share_backend_name=ganesha
+manila type-key ganesha set snapshot_support=False
+
+```
+<img src="http://i.imgur.com/uLwJyl4.png">
+
+
+- Tạo một share có tên `share-2` dung lượng 2GB trên backend `ganesha`
+
+```
+manila create nfs 2 --name share-2 --share-type ganesha
+```
+<img src="http://i.imgur.com/Rp88dFq.png">
+
+
+- Set access allow theo IP
+
+<img src="http://i.imgur.com/0wVD1nU.png">
+
+Khi tạo một access ta thử kiểm tra file export theo như ID của share trên ganesha server tại đường dẫn `/etc/ganesha/export.d/`sẽ như sau
+
+<img src="http://i.imgur.com/D90X63q.png">
+
+- Kiểm tra đường dẫn mount
+
+<img src="http://i.imgur.com/RoSg5Pq.png">
+
+Ta thấy đường dẫn mount yêu cầu thêm `access-id` chính là ID của access ta tạo ở trên.
+
+- Thực hiện mount kiểm tra trên client
+
+<img src="http://i.imgur.com/1HBMUAj.png">
+
+- Ta thấy mỗi một share được tạo ra sẽ là một export trên nfs-ganesha server và ứng với một share là một directory mới được tạo ra trên share server. Và các export được set đúng quota như share..
