@@ -554,6 +554,14 @@ Nói thêm về volume-pattern:
 
 Với script ở trên mình đã tạo các volume có mẫu `manila-$i-$j` với $i là size của volume và $j là số thứ tự. Do vậy ta sẽ cấu hình mẫu để các share manila khi tạo ra sẽ mapping với các volume trên glusterfs.
 
+- Cài đặt glusterfs-client:
+
+```
+add-apt-repository ppa:gluster/glusterfs-3.7 -y
+apt-get update
+apt-get install glusterfs-client -y
+```
+
 - Sau khi cấu hình xong ta khởi động lại manila-share
 
 ```
